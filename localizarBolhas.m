@@ -14,13 +14,11 @@ function ROIs = localizarBolhas(imgCorrigida)
 % LOCALIZARBOLHAS
 %
 % Ajusta as ROIs para o tamanho da imagem corrigida.
-
 load('layoutFR.mat','ROI');
 
 [h,w,~] = size(imgCorrigida);
 
 %% Dimensões utilizadas na correção
-
 larguraRef = 2100;
 alturaRef  = 2970;
 
@@ -30,17 +28,12 @@ sy = h/alturaRef;
 ROIs = ROI;
 
 for q = 1:50
-
     for alt = 1:5
-
         ROIs(q,alt).x = round(ROI(q,alt).x * sx * 10);
         ROIs(q,alt).y = round((297 - ROI(q,alt).y) * sy * 10) - 50;
-
         ROIs(q,alt).w = round(ROI(q,alt).w * sx * 10);
         ROIs(q,alt).h = round(ROI(q,alt).h * sy * 10);
-
     end
-
 end
 
 fprintf('250 bolhas ajustadas para a imagem.\n');
@@ -50,9 +43,7 @@ imshow(imgCorrigida);
 hold on;
 
 for q = 1:50
-
     for alt = 1:5
-
         rectangle( ...
             'Position',...
             [ROIs(q,alt).x,...
@@ -60,11 +51,8 @@ for q = 1:50
              ROIs(q,alt).w,...
              ROIs(q,alt).h],...
             'EdgeColor','r');
-
     end
-
 end
 
 title('ROIs das Bolhas');
-
 end

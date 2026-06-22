@@ -1,0 +1,1316 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistema OMR - Correção Automática de Provas</title>
+    <link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        /* ===========================================
+           CSS CUSTOM PROPERTIES (THEME)
+           =========================================== */
+        :root {
+            --bg-primary: #1a1a1a;
+            --bg-gradient: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 50%, #1a1a1a 100%);
+            --card-bg: #FF5722;
+            --text-primary: #ffffff;
+            --text-on-card: #1a1a1a;
+            --text-secondary: #b0b0b0;
+            --font-display: 'Archivo Black', sans-serif;
+            --font-body: 'Space Grotesk', sans-serif;
+            --title-size: 96px;
+            --subtitle-size: 28px;
+            --body-size: 24px;
+            --slide-padding: 80px;
+            --content-gap: 32px;
+            --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+            --duration-normal: 0.6s;
+        }
+
+        /* ===========================================
+           BASE STYLES
+           =========================================== */
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        /* --- viewport-base.css CONTENTS --- */
+        html, body {
+            width: 100%;
+            height: 100%;
+            margin: 0;
+            overflow: hidden;
+            background: var(--stage-bg, #000);
+        }
+
+        .deck-viewport {
+            position: fixed;
+            inset: 0;
+            overflow: hidden;
+            background: var(--stage-bg, #000);
+        }
+
+        .deck-stage {
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 1920px;
+            height: 1080px;
+            overflow: hidden;
+            transform-origin: 0 0;
+            background: var(--slide-bg, #fff);
+        }
+
+        .slide {
+            position: absolute;
+            inset: 0;
+            width: 1920px;
+            height: 1080px;
+            overflow: hidden;
+            display: block;
+            visibility: hidden;
+            opacity: 0;
+            pointer-events: none;
+            background: var(--slide-bg, #fff);
+        }
+
+        .slide.active,
+        .slide.visible {
+            visibility: visible;
+            opacity: 1;
+            pointer-events: auto;
+            z-index: 1;
+        }
+
+        img, video, canvas, svg {
+            max-width: 100%;
+            max-height: 100%;
+        }
+
+        .deck-controls {
+            position: fixed;
+            left: 50%;
+            bottom: 22px;
+            transform: translateX(-50%);
+            z-index: 1000;
+        }
+
+        @media print {
+            html, body {
+                width: 1920px;
+                height: auto;
+                overflow: visible;
+                background: #fff;
+            }
+
+            .deck-viewport {
+                position: static;
+                overflow: visible;
+                background: #fff;
+            }
+
+            .deck-stage {
+                position: static;
+                width: auto;
+                height: auto;
+                transform: none !important;
+                background: none;
+            }
+
+            .slide {
+                position: relative;
+                display: block !important;
+                visibility: visible !important;
+                opacity: 1 !important;
+                pointer-events: auto !important;
+                width: 1920px;
+                height: 1080px;
+                break-after: page;
+                page-break-after: always;
+            }
+
+            .slide:last-child {
+                break-after: auto;
+                page-break-after: auto;
+            }
+
+            .deck-controls {
+                display: none !important;
+            }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after {
+                animation-duration: 0.01ms !important;
+                transition-duration: 0.2s !important;
+            }
+        }
+        /* --- END viewport-base.css --- */
+
+        /* ===========================================
+           ANIMATIONS
+           =========================================== */
+        .reveal {
+            opacity: 0;
+            transform: translateY(30px);
+            transition: opacity var(--duration-normal) var(--ease-out-expo),
+                        transform var(--duration-normal) var(--ease-out-expo);
+        }
+
+        .slide.visible .reveal {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .reveal:nth-child(1) { transition-delay: 0.1s; }
+        .reveal:nth-child(2) { transition-delay: 0.2s; }
+        .reveal:nth-child(3) { transition-delay: 0.3s; }
+        .reveal:nth-child(4) { transition-delay: 0.4s; }
+        .reveal:nth-child(5) { transition-delay: 0.5s; }
+        .reveal:nth-child(6) { transition-delay: 0.6s; }
+
+        /* ===========================================
+           SHARED COMPONENTS
+           =========================================== */
+        .slide-number {
+            position: absolute;
+            top: 60px;
+            left: 80px;
+            font-family: var(--font-display);
+            font-size: 120px;
+            color: rgba(255, 255, 255, 0.1);
+            line-height: 1;
+        }
+
+        .nav-breadcrumb {
+            position: absolute;
+            top: 60px;
+            right: 80px;
+            font-family: var(--font-body);
+            font-size: 14px;
+            color: var(--text-secondary);
+            letter-spacing: 2px;
+            text-transform: uppercase;
+        }
+
+        .nav-breadcrumb .active {
+            color: var(--text-primary);
+        }
+
+        .slide-title {
+            font-family: var(--font-display);
+            font-size: 72px;
+            color: var(--text-primary);
+            line-height: 1.1;
+            margin-bottom: 24px;
+        }
+
+        .slide-subtitle {
+            font-family: var(--font-body);
+            font-size: var(--subtitle-size);
+            color: var(--text-secondary);
+            line-height: 1.5;
+        }
+
+        .accent-card {
+            background: var(--card-bg);
+            border-radius: 24px;
+            padding: 60px;
+        }
+
+        .bullet-list {
+            list-style: none;
+            padding: 0;
+        }
+
+        .bullet-list li {
+            font-family: var(--font-body);
+            font-size: var(--body-size);
+            color: var(--text-primary);
+            line-height: 1.8;
+            padding-left: 32px;
+            position: relative;
+        }
+
+        .bullet-list li::before {
+            content: '→';
+            position: absolute;
+            left: 0;
+            color: var(--card-bg);
+            font-weight: 700;
+        }
+
+        /* ===========================================
+           SLIDE 1: TITLE
+           =========================================== */
+        .slide-1 {
+            display: grid;
+            grid-template-columns: 1fr;
+            grid-template-rows: 1fr;
+            padding: var(--slide-padding);
+            background: var(--bg-gradient);
+        }
+
+        .slide-1 .accent-card {
+            position: absolute;
+            right: 120px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 500px;
+            height: 500px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .slide-1 .accent-card h2 {
+            font-family: var(--font-display);
+            font-size: 48px;
+            color: var(--text-on-card);
+            line-height: 1.2;
+            text-align: center;
+        }
+
+        .slide-1 .title-content {
+            position: absolute;
+            left: 80px;
+            bottom: 120px;
+            max-width: 700px;
+        }
+
+        .slide-1 .title-content h1 {
+            font-family: var(--font-display);
+            font-size: var(--title-size);
+            color: var(--text-primary);
+            line-height: 1.1;
+            margin-bottom: 24px;
+        }
+
+        .slide-1 .title-content p {
+            font-family: var(--font-body);
+            font-size: var(--subtitle-size);
+            color: var(--text-secondary);
+            line-height: 1.5;
+        }
+
+        .slide-1 .author-info {
+            position: absolute;
+            left: 80px;
+            bottom: 60px;
+            font-family: var(--font-body);
+            font-size: 18px;
+            color: var(--text-secondary);
+        }
+
+        /* ===========================================
+           SLIDE 2: OBJECTIVE
+           =========================================== */
+        .slide-2 {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            padding: var(--slide-padding);
+            background: var(--bg-gradient);
+        }
+
+        .slide-2 .content-wrapper {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 80px;
+            align-items: center;
+        }
+
+        .slide-2 .text-content {
+            max-width: 700px;
+        }
+
+        .slide-2 .accent-card {
+            height: 400px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .slide-2 .accent-card p {
+            font-family: var(--font-display);
+            font-size: 36px;
+            color: var(--text-on-card);
+            text-align: center;
+            line-height: 1.4;
+        }
+
+        /* ===========================================
+           SLIDE 3: PROBLEM
+           =========================================== */
+        .slide-3 {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            padding: var(--slide-padding);
+            background: var(--bg-gradient);
+        }
+
+        .slide-3 .content-wrapper {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 80px;
+            align-items: center;
+        }
+
+        .slide-3 .image-placeholder {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 24px;
+            height: 500px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: var(--font-body);
+            font-size: 24px;
+            color: var(--text-secondary);
+            border: 2px dashed rgba(255, 255, 255, 0.1);
+        }
+
+        /* ===========================================
+           SLIDE 4: SOLUTION OVERVIEW
+           =========================================== */
+        .slide-4 {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            padding: var(--slide-padding);
+            background: var(--bg-gradient);
+        }
+
+        .slide-4 .pipeline-grid {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 24px;
+            margin-top: 60px;
+        }
+
+        .slide-4 .pipeline-step {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 16px;
+            padding: 40px 24px;
+            text-align: center;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .slide-4 .pipeline-step .step-number {
+            font-family: var(--font-display);
+            font-size: 48px;
+            color: var(--card-bg);
+            margin-bottom: 16px;
+        }
+
+        .slide-4 .pipeline-step .step-title {
+            font-family: var(--font-body);
+            font-size: 18px;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin-bottom: 8px;
+        }
+
+        .slide-4 .pipeline-step .step-desc {
+            font-family: var(--font-body);
+            font-size: 14px;
+            color: var(--text-secondary);
+            line-height: 1.5;
+        }
+
+        /* ===========================================
+           SLIDE 5: FOLHA DE RESPOSTAS
+           =========================================== */
+        .slide-5 {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            padding: var(--slide-padding);
+            background: var(--bg-gradient);
+        }
+
+        .slide-5 .content-wrapper {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 80px;
+            align-items: center;
+        }
+
+        .slide-5 .image-placeholder {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 24px;
+            height: 600px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: var(--font-body);
+            font-size: 24px;
+            color: var(--text-secondary);
+            border: 2px dashed rgba(255, 255, 255, 0.1);
+        }
+
+        /* ===========================================
+           SLIDE 6: MARCADORES FIDUCIAIS
+           =========================================== */
+        .slide-6 {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            padding: var(--slide-padding);
+            background: var(--bg-gradient);
+        }
+
+        .slide-6 .content-wrapper {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 80px;
+            align-items: center;
+        }
+
+        .slide-6 .image-placeholder {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 24px;
+            height: 500px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: var(--font-body);
+            font-size: 24px;
+            color: var(--text-secondary);
+            border: 2px dashed rgba(255, 255, 255, 0.1);
+        }
+
+        /* ===========================================
+           SLIDE 7: DETECÇÃO DE MARCADORES
+           =========================================== */
+        .slide-7 {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            padding: var(--slide-padding);
+            background: var(--bg-gradient);
+        }
+
+        .slide-7 .content-wrapper {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 80px;
+            align-items: center;
+        }
+
+        .slide-7 .code-block {
+            background: rgba(0, 0, 0, 0.4);
+            border-radius: 16px;
+            padding: 40px;
+            font-family: 'Courier New', monospace;
+            font-size: 16px;
+            color: var(--text-primary);
+            line-height: 1.8;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .slide-7 .code-block .comment {
+            color: var(--text-secondary);
+        }
+
+        .slide-7 .code-block .keyword {
+            color: var(--card-bg);
+        }
+
+        /* ===========================================
+           SLIDE 8: CORREÇÃO DE PERSPECTIVA
+           =========================================== */
+        .slide-8 {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            padding: var(--slide-padding);
+            background: var(--bg-gradient);
+        }
+
+        .slide-8 .content-wrapper {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 80px;
+            align-items: center;
+        }
+
+        .slide-8 .before-after {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 24px;
+        }
+
+        .slide-8 .image-placeholder {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 24px;
+            height: 300px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: var(--font-body);
+            font-size: 18px;
+            color: var(--text-secondary);
+            border: 2px dashed rgba(255, 255, 255, 0.1);
+        }
+
+        /* ===========================================
+           SLIDE 9: LOCALIZAÇÃO DAS BOLHAS
+           =========================================== */
+        .slide-9 {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            padding: var(--slide-padding);
+            background: var(--bg-gradient);
+        }
+
+        .slide-9 .content-wrapper {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 80px;
+            align-items: center;
+        }
+
+        .slide-9 .image-placeholder {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 24px;
+            height: 500px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: var(--font-body);
+            font-size: 24px;
+            color: var(--text-secondary);
+            border: 2px dashed rgba(255, 255, 255, 0.1);
+        }
+
+        /* ===========================================
+           SLIDE 10: LEITURA DAS RESPOSTAS
+           =========================================== */
+        .slide-10 {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            padding: var(--slide-padding);
+            background: var(--bg-gradient);
+        }
+
+        .slide-10 .content-wrapper {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 80px;
+            align-items: center;
+        }
+
+        .slide-10 .threshold-table {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 16px;
+            padding: 40px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .slide-10 .threshold-table table {
+            width: 100%;
+            border-collapse: collapse;
+            font-family: var(--font-body);
+            font-size: 20px;
+        }
+
+        .slide-10 .threshold-table th {
+            color: var(--card-bg);
+            font-weight: 700;
+            text-align: left;
+            padding: 16px;
+            border-bottom: 2px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .slide-10 .threshold-table td {
+            color: var(--text-primary);
+            padding: 16px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        /* ===========================================
+           SLIDE 11: AVALIAÇÃO
+           =========================================== */
+        .slide-11 {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            padding: var(--slide-padding);
+            background: var(--bg-gradient);
+        }
+
+        .slide-11 .content-wrapper {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 80px;
+            align-items: center;
+        }
+
+        .slide-11 .result-card {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 24px;
+            padding: 60px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            text-align: center;
+        }
+
+        .slide-11 .result-card .result-value {
+            font-family: var(--font-display);
+            font-size: 120px;
+            color: var(--card-bg);
+            line-height: 1;
+        }
+
+        .slide-11 .result-card .result-label {
+            font-family: var(--font-body);
+            font-size: 24px;
+            color: var(--text-secondary);
+            margin-top: 16px;
+        }
+
+        /* ===========================================
+           SLIDE 12: DEMONSTRAÇÃO
+           =========================================== */
+        .slide-12 {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: var(--slide-padding);
+            background: var(--bg-gradient);
+            text-align: center;
+        }
+
+        .slide-12 .demo-title {
+            font-family: var(--font-display);
+            font-size: 120px;
+            color: var(--text-primary);
+            margin-bottom: 40px;
+        }
+
+        .slide-12 .demo-subtitle {
+            font-family: var(--font-body);
+            font-size: 36px;
+            color: var(--text-secondary);
+            max-width: 800px;
+            line-height: 1.5;
+        }
+
+        .slide-12 .accent-card {
+            margin-top: 60px;
+            padding: 40px 80px;
+        }
+
+        .slide-12 .accent-card p {
+            font-family: var(--font-display);
+            font-size: 28px;
+            color: var(--text-on-card);
+        }
+
+        /* ===========================================
+           SLIDE 13: RESULTADOS
+           =========================================== */
+        .slide-13 {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            padding: var(--slide-padding);
+            background: var(--bg-gradient);
+        }
+
+        .slide-13 .results-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 40px;
+            margin-top: 60px;
+        }
+
+        .slide-13 .result-item {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 24px;
+            padding: 60px 40px;
+            text-align: center;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .slide-13 .result-item .result-number {
+            font-family: var(--font-display);
+            font-size: 72px;
+            color: var(--card-bg);
+            line-height: 1;
+            margin-bottom: 16px;
+        }
+
+        .slide-13 .result-item .result-desc {
+            font-family: var(--font-body);
+            font-size: 20px;
+            color: var(--text-secondary);
+        }
+
+        /* ===========================================
+           SLIDE 14: CONCLUSÃO
+           =========================================== */
+        .slide-14 {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            padding: var(--slide-padding);
+            background: var(--bg-gradient);
+        }
+
+        .slide-14 .content-wrapper {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 80px;
+            align-items: center;
+        }
+
+        /* ===========================================
+           SLIDE 15: REFERÊNCIAS
+           =========================================== */
+        .slide-15 {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            padding: var(--slide-padding);
+            background: var(--bg-gradient);
+        }
+
+        .slide-15 .references-list {
+            margin-top: 60px;
+        }
+
+        .slide-15 .references-list li {
+            font-family: var(--font-body);
+            font-size: 20px;
+            color: var(--text-secondary);
+            line-height: 2;
+            padding-left: 0;
+        }
+
+        .slide-15 .references-list li::before {
+            content: none;
+        }
+
+        /* ===========================================
+           SLIDE 16: THANK YOU
+           =========================================== */
+        .slide-16 {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: var(--slide-padding);
+            background: var(--bg-gradient);
+            text-align: center;
+        }
+
+        .slide-16 .thank-you {
+            font-family: var(--font-display);
+            font-size: 160px;
+            color: var(--text-primary);
+            line-height: 1;
+            margin-bottom: 40px;
+        }
+
+        .slide-16 .contact-info {
+            font-family: var(--font-body);
+            font-size: 24px;
+            color: var(--text-secondary);
+            line-height: 2;
+        }
+
+        .slide-16 .accent-card {
+            margin-top: 60px;
+            padding: 30px 60px;
+        }
+
+        .slide-16 .accent-card p {
+            font-family: var(--font-body);
+            font-size: 24px;
+            font-weight: 700;
+            color: var(--text-on-card);
+        }
+    </style>
+</head>
+<body>
+    <div class="deck-viewport">
+        <main class="deck-stage" id="deckStage">
+            
+            <!-- SLIDE 1: Title -->
+            <section class="slide slide-1 active">
+                <div class="slide-number reveal">01</div>
+                <div class="nav-breadcrumb reveal">
+                    <span class="active">Introdução</span> / Pipeline / Resultados / Conclusão
+                </div>
+                <div class="accent-card reveal">
+                    <h2>PDI<br>UTFPR</h2>
+                </div>
+                <div class="title-content">
+                    <h1 class="reveal">Sistema OMR</h1>
+                    <p class="reveal">Correção Automática de Provas<br>com Processamento Digital de Imagens</p>
+                </div>
+                <div class="author-info reveal">
+                    Antonio Galvão Martins Neto & Gustavo Ruiz de Queiroz
+                </div>
+            </section>
+
+            <!-- SLIDE 2: Objective -->
+            <section class="slide slide-2">
+                <div class="slide-number reveal">02</div>
+                <div class="nav-breadcrumb reveal">
+                    Introdução / <span class="active">Objetivo</span> / Pipeline / Resultados
+                </div>
+                <div class="content-wrapper">
+                    <div class="text-content">
+                        <h1 class="slide-title reveal">Objetivo</h1>
+                        <ul class="bullet-list">
+                            <li class="reveal">Automatizar a correção de provas objetivas</li>
+                            <li class="reveal">Eliminar erros manuais de correção</li>
+                            <li class="reveal">Reduzir tempo de avaliação</li>
+                            <li class="reveal">Funcionar com fotos de smartphone</li>
+                            <li class="reveal">Tolerar variações de posição e escala</li>
+                        </ul>
+                    </div>
+                    <div class="accent-card reveal">
+                        <p>50 Questões<br>5 Alternativas<br>Correção em Tempo Real</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- SLIDE 3: Problem -->
+            <section class="slide slide-3">
+                <div class="slide-number reveal">03</div>
+                <div class="nav-breadcrumb reveal">
+                    Introdução / <span class="active">Problema</span> / Pipeline / Resultados
+                </div>
+                <div class="content-wrapper">
+                    <div class="text-content">
+                        <h1 class="slide-title reveal">O Problema</h1>
+                        <ul class="bullet-list">
+                            <li class="reveal">Correção manual é lenta e propensa a erros</li>
+                            <li class="reveal">Equipamentos OMR dedicados são caros</li>
+                            <li class="reveal">Fotos de smartphone têm perspectiva e ruído</li>
+                            <li class="reveal">Necessidade de solução acessível</li>
+                        </ul>
+                    </div>
+                    <div class="image-placeholder reveal">
+                        [Imagem: Prova com marcações]
+                    </div>
+                </div>
+            </section>
+
+            <!-- SLIDE 4: Solution Overview -->
+            <section class="slide slide-4">
+                <div class="slide-number reveal">04</div>
+                <div class="nav-breadcrumb reveal">
+                    Introdução / Objetivo / <span class="active">Pipeline</span> / Resultados
+                </div>
+                <h1 class="slide-title reveal" style="text-align: center;">Pipeline do Sistema</h1>
+                <div class="pipeline-grid">
+                    <div class="pipeline-step reveal">
+                        <div class="step-number">1</div>
+                        <div class="step-title">Aquisição</div>
+                        <div class="step-desc">Foto da folha de respostas</div>
+                    </div>
+                    <div class="pipeline-step reveal">
+                        <div class="step-number">2</div>
+                        <div class="step-title">Detecção</div>
+                        <div class="step-desc">Marcadores fiduciais</div>
+                    </div>
+                    <div class="pipeline-step reveal">
+                        <div class="step-number">3</div>
+                        <div class="step-title">Correção</div>
+                        <div class="step-desc">Perspectiva e escala</div>
+                    </div>
+                    <div class="pipeline-step reveal">
+                        <div class="step-number">4</div>
+                        <div class="step-title">Leitura</div>
+                        <div class="step-desc">Bolhas preenchidas</div>
+                    </div>
+                    <div class="pipeline-step reveal">
+                        <div class="step-number">5</div>
+                        <div class="step-title">Avaliação</div>
+                        <div class="step-desc">Comparação com gabarito</div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- SLIDE 5: Folha de Respostas -->
+            <section class="slide slide-5">
+                <div class="slide-number reveal">05</div>
+                <div class="nav-breadcrumb reveal">
+                    Introdução / Objetivo / <span class="active">Folha</span> / Resultados
+                </div>
+                <div class="content-wrapper">
+                    <div class="text-content">
+                        <h1 class="slide-title reveal">Folha de Respostas</h1>
+                        <ul class="bullet-list">
+                            <li class="reveal">4 marcadores fiduciais nos cantos</li>
+                            <li class="reveal">50 questões em 2 colunas</li>
+                            <li class="reveal">5 alternativas (A-E) por questão</li>
+                            <li class="reveal">Gerada em PDF para impressão</li>
+                            <li class="reveal">Coordenadas salvas em .mat</li>
+                        </ul>
+                    </div>
+                    <div class="image-placeholder reveal">
+                        [Imagem: FolhaResposta.pdf]
+                    </div>
+                </div>
+            </section>
+
+            <!-- SLIDE 6: Marcadores Fiduciais -->
+            <section class="slide slide-6">
+                <div class="slide-number reveal">06</div>
+                <div class="nav-breadcrumb reveal">
+                    Pipeline / <span class="active">Marcadores</span> / Leitura / Resultados
+                </div>
+                <div class="content-wrapper">
+                    <div class="text-content">
+                        <h1 class="slide-title reveal">Marcadores Fiduciais</h1>
+                        <ul class="bullet-list">
+                            <li class="reveal">4 quadrados pretos nos cantos</li>
+                            <li class="reveal">Permitem detectar posição da folha</li>
+                            <li class="reveal">Base para correção de perspectiva</li>
+                            <li class="reveal">Robustos a rotação e escala</li>
+                        </ul>
+                    </div>
+                    <div class="image-placeholder reveal">
+                        [Imagem: Marcadores detectados]
+                    </div>
+                </div>
+            </section>
+
+            <!-- SLIDE 7: Detecção de Marcadores -->
+            <section class="slide slide-7">
+                <div class="slide-number reveal">07</div>
+                <div class="nav-breadcrumb reveal">
+                    Pipeline / <span class="active">Detecção</span> / Leitura / Resultados
+                </div>
+                <div class="content-wrapper">
+                    <div class="text-content">
+                        <h1 class="slide-title reveal">Detecção</h1>
+                        <ul class="bullet-list">
+                            <li class="reveal">Conversão para escala de cinza</li>
+                            <li class="reveal">Binarização adaptativa</li>
+                            <li class="reveal">Filtragem por área e aspecto</li>
+                            <li class="reveal">Ordenação dos 4 cantos</li>
+                        </ul>
+                    </div>
+                    <div class="code-block reveal">
+                        <span class="comment">% Binarização adaptativa</span><br>
+                        T = <span class="keyword">adaptthresh</span>(gray, 0.5);<br>
+                        BW = <span class="keyword">imbinarize</span>(gray, T);<br><br>
+                        <span class="comment">% Filtrar quadrados</span><br>
+                        aspecto = largura/altura;<br>
+                        <span class="keyword">if</span> aspecto > 0.7 && aspecto < 1.3
+                    </div>
+                </div>
+            </section>
+
+            <!-- SLIDE 8: Correção de Perspectiva -->
+            <section class="slide slide-8">
+                <div class="slide-number reveal">08</div>
+                <div class="nav-breadcrumb reveal">
+                    Pipeline / Detecção / <span class="active">Perspectiva</span> / Resultados
+                </div>
+                <div class="content-wrapper">
+                    <div class="text-content">
+                        <h1 class="slide-title reveal">Correção de Perspectiva</h1>
+                        <ul class="bullet-list">
+                            <li class="reveal">Transformação projetiva</li>
+                            <li class="reveal">fitgeotform2d + imwarp</li>
+                            <li class="reveal">Folha planificada em A4</li>
+                            <li class="reveal">Tolerância a ângulo e distância</li>
+                        </ul>
+                    </div>
+                    <div class="before-after">
+                        <div class="image-placeholder reveal">
+                            [Antes: Com perspectiva]
+                        </div>
+                        <div class="image-placeholder reveal">
+                            [Depois: Corrigida]
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- SLIDE 9: Localização das Bolhas -->
+            <section class="slide slide-9">
+                <div class="slide-number reveal">09</div>
+                <div class="nav-breadcrumb reveal">
+                    Pipeline / Detecção / <span class="active">Localização</span> / Resultados
+                </div>
+                <div class="content-wrapper">
+                    <div class="text-content">
+                        <h1 class="slide-title reveal">Localização das Bolhas</h1>
+                        <ul class="bullet-list">
+                            <li class="reveal">250 ROIs (50 questões × 5 alt)</li>
+                            <li class="reveal">Ajuste proporcional à escala</li>
+                            <li class="reveal">Baseado em coordenadas do PDF</li>
+                            <li class="reveal">Visualização para debug</li>
+                        </ul>
+                    </div>
+                    <div class="image-placeholder reveal">
+                        [Imagem: ROIs das bolhas]
+                    </div>
+                </div>
+            </section>
+
+            <!-- SLIDE 10: Leitura das Respostas -->
+            <section class="slide slide-10">
+                <div class="slide-number reveal">10</div>
+                <div class="nav-breadcrumb reveal">
+                    Pipeline / Detecção / <span class="active">Leitura</span> / Resultados
+                </div>
+                <div class="content-wrapper">
+                    <div class="text-content">
+                        <h1 class="slide-title reveal">Leitura das Respostas</h1>
+                        <ul class="bullet-list">
+                            <li class="reveal">Análise de escurecimento médio</li>
+                            <li class="reveal">Limiar de marcação: 50%</li>
+                            <li class="reveal">Detecção de múltiplas marcações</li>
+                            <li class="reveal">Marcação em branco = '-'</li>
+                            <li class="reveal">Múltiplas = 'X' (anulada)</li>
+                        </ul>
+                    </div>
+                    <div class="threshold-table reveal">
+                        <table>
+                            <tr>
+                                <th>Condição</th>
+                                <th>Resultado</th>
+                            </tr>
+                            <tr>
+                                <td>Valor < 50%</td>
+                                <td>Em branco (-)</td>
+                            </tr>
+                            <tr>
+                                <td>1 valor > 50%</td>
+                                <td>Resposta válida</td>
+                            </tr>
+                            <tr>
+                                <td>2+ valores > 80%</td>
+                                <td>Anulada (X)</td>
+                            </tr>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- SLIDE 11: Avaliação -->
+            <section class="slide slide-11">
+                <div class="slide-number reveal">11</div>
+                <div class="nav-breadcrumb reveal">
+                    Pipeline / Detecção / Leitura / <span class="active">Avaliação</span>
+                </div>
+                <div class="content-wrapper">
+                    <div class="text-content">
+                        <h1 class="slide-title reveal">Avaliação</h1>
+                        <ul class="bullet-list">
+                            <li class="reveal">Comparação com gabarito</li>
+                            <li class="reveal">Pesos configuráveis por questão</li>
+                            <li class="reveal">Nota proporcional: 0-10</li>
+                            <li class="reveal">Resultado salvo em .mat</li>
+                        </ul>
+                    </div>
+                    <div class="result-card reveal">
+                        <div class="result-value">8.5</div>
+                        <div class="result-label">Nota Final</div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- SLIDE 12: Demonstração -->
+            <section class="slide slide-12">
+                <div class="slide-number reveal">12</div>
+                <div class="nav-breadcrumb reveal">
+                    <span class="active">Demonstração</span> / Resultados / Conclusão
+                </div>
+                <div class="demo-title reveal">DEMONSTRAÇÃO</div>
+                <div class="demo-subtitle reveal">
+                    Execução ao vivo do sistema OMR<br>
+                    com correção de prova em tempo real
+                </div>
+                <div class="accent-card reveal">
+                    <p>MATLAB → main.m</p>
+                </div>
+            </section>
+
+            <!-- SLIDE 13: Resultados -->
+            <section class="slide slide-13">
+                <div class="slide-number reveal">13</div>
+                <div class="nav-breadcrumb reveal">
+                    Demonstração / <span class="active">Resultados</span> / Conclusão
+                </div>
+                <h1 class="slide-title reveal" style="text-align: center;">Resultados</h1>
+                <div class="results-grid">
+                    <div class="result-item reveal">
+                        <div class="result-number">50</div>
+                        <div class="result-desc">Questões corrigidas</div>
+                    </div>
+                    <div class="result-item reveal">
+                        <div class="result-number">15</div>
+                        <div class="result-desc">Acertos detectados</div>
+                    </div>
+                    <div class="result-item reveal">
+                        <div class="result-number">3.0</div>
+                        <div class="result-desc">Nota atribuída</div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- SLIDE 14: Conclusion -->
+            <section class="slide slide-14">
+                <div class="slide-number reveal">14</div>
+                <div class="nav-breadcrumb reveal">
+                    Demonstração / Resultados / <span class="active">Conclusão</span>
+                </div>
+                <div class="content-wrapper">
+                    <div class="text-content">
+                        <h1 class="slide-title reveal">Conclusão</h1>
+                        <ul class="bullet-list">
+                            <li class="reveal">Sistema funcional e robusto</li>
+                            <li class="reveal">Tolerância a variações reais</li>
+                            <li class="reveal">Custo zero (MATLAB + smartphone)</li>
+                            <li class="reveal">Extensível para 4 tipos de prova</li>
+                            <li class="reveal">Aplicável em instituições de ensino</li>
+                        </ul>
+                    </div>
+                    <div class="accent-card reveal">
+                        <p>Trabalho Futuro:<br>ML para<br>classificação</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- SLIDE 15: References -->
+            <section class="slide slide-15">
+                <div class="slide-number reveal">15</div>
+                <div class="nav-breadcrumb reveal">
+                    <span class="active">Referências</span>
+                </div>
+                <h1 class="slide-title reveal">Referências</h1>
+                <ul class="references-list bullet-list">
+                    <li class="reveal">MathWorks. Image Processing Toolbox Documentation, 2024.</li>
+                    <li class="reveal">Gonzalez, R. C. & Woods, R. E. Digital Image Processing, 4th Ed.</li>
+                    <li class="reveal">Otsu, N. A Threshold Selection Method from Gray-Level Histograms, 1979.</li>
+                    <li class="reveal">Bradley, D. & Roth, G. Adaptive Thresholding, 2007.</li>
+                </ul>
+            </section>
+
+            <!-- SLIDE 16: Thank You -->
+            <section class="slide slide-16">
+                <div class="slide-number reveal">16</div>
+                <div class="nav-breadcrumb reveal">
+                    <span class="active">Obrigado</span>
+                </div>
+                <div class="thank-you reveal">OBRIGADO</div>
+                <div class="contact-info reveal">
+                    Antonio Galvão Martins Neto<br>
+                    Gustavo Ruiz de Queiroz<br>
+                    UTFPR - Processamento Digital de Imagens
+                </div>
+                <div class="accent-card reveal">
+                    <p>Perguntas?</p>
+                </div>
+            </section>
+
+        </main>
+    </div>
+
+    <script>
+        /* ===========================================
+           SLIDE PRESENTATION CONTROLLER
+           =========================================== */
+        class SlidePresentation {
+            constructor() {
+                this.slides = document.querySelectorAll('.slide');
+                this.currentSlide = 0;
+                this.stage = document.getElementById('deckStage');
+                this.setupStageScale();
+                this.setupKeyboardNav();
+                this.setupTouchNav();
+                this.showSlide(0);
+            }
+
+            setupStageScale() {
+                const scale = () => {
+                    const factor = Math.min(window.innerWidth / 1920, window.innerHeight / 1080);
+                    const x = (window.innerWidth - 1920 * factor) / 2;
+                    const y = (window.innerHeight - 1080 * factor) / 2;
+                    this.stage.style.transform = `translate(${x}px, ${y}px) scale(${factor})`;
+                };
+                scale();
+                window.addEventListener('resize', scale);
+            }
+
+            setupKeyboardNav() {
+                document.addEventListener('keydown', (e) => {
+                    if (e.key === 'ArrowRight' || e.key === ' ' || e.key === 'PageDown') {
+                        e.preventDefault();
+                        this.nextSlide();
+                    } else if (e.key === 'ArrowLeft' || e.key === 'PageUp') {
+                        e.preventDefault();
+                        this.prevSlide();
+                    } else if (e.key === 'Home') {
+                        e.preventDefault();
+                        this.showSlide(0);
+                    } else if (e.key === 'End') {
+                        e.preventDefault();
+                        this.showSlide(this.slides.length - 1);
+                    }
+                });
+            }
+
+            setupTouchNav() {
+                let touchStartX = 0;
+                let touchEndX = 0;
+
+                document.addEventListener('touchstart', (e) => {
+                    touchStartX = e.changedTouches[0].screenX;
+                }, { passive: true });
+
+                document.addEventListener('touchend', (e) => {
+                    touchEndX = e.changedTouches[0].screenX;
+                    this.handleSwipe(touchStartX, touchEndX);
+                }, { passive: true });
+            }
+
+            handleSwipe(startX, endX) {
+                const swipeThreshold = 50;
+                const diff = startX - endX;
+
+                if (Math.abs(diff) > swipeThreshold) {
+                    if (diff > 0) {
+                        this.nextSlide();
+                    } else {
+                        this.prevSlide();
+                    }
+                }
+            }
+
+            nextSlide() {
+                if (this.currentSlide < this.slides.length - 1) {
+                    this.showSlide(this.currentSlide + 1);
+                }
+            }
+
+            prevSlide() {
+                if (this.currentSlide > 0) {
+                    this.showSlide(this.currentSlide - 1);
+                }
+            }
+
+            showSlide(index) {
+                this.currentSlide = Math.max(0, Math.min(index, this.slides.length - 1));
+                this.slides.forEach((slide, i) => {
+                    slide.classList.toggle('active', i === this.currentSlide);
+                    slide.classList.toggle('visible', i === this.currentSlide);
+                });
+            }
+        }
+
+        new SlidePresentation();
+    </script>
+</body>
+</html>

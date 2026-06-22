@@ -37,9 +37,7 @@ brancos = 0;
 pontosObtidos = 0;
 
 %% Avaliação
-
 for q = 1:length(gabarito)
-
     resposta = respostasAluno(q);
 
     fprintf('Q%02d -> Aluno:%c | Gabarito:%c\n',...
@@ -48,42 +46,27 @@ for q = 1:length(gabarito)
     gabarito(q));
 
     % Questão em branco
-
     if resposta == '-'
-
         brancos = brancos + 1;
         continue;
-
     end
 
     % Questão anulada por múltipla marcação
-
     if resposta == 'X'
-
         erros = erros + 1;
         continue;
-
     end
 
     % Acerto
-
     if resposta == gabarito(q)
-
         acertos = acertos + 1;
         pontosObtidos = pontosObtidos + pesos(q);
-
     else
-
         erros = erros + 1;
-
     end
-
 end
 
 %% Nota
-
 pontuacaoMaxima = sum(pesos);
-
 nota = (pontosObtidos / pontuacaoMaxima) * 10;
-
 end

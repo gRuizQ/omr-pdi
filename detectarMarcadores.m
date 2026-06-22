@@ -31,7 +31,6 @@ title('Cinza');
 
 
 %% Binarização
-
 BW = gray < 80;
 
 figure;
@@ -39,11 +38,10 @@ imshow(BW);
 title('Imagem binarizada');
 
 %% Remover ruídos pequenos
-
-BW = bwareaopen(BW,500);
+areaMin = 100; % ajustado para tolerar fotos de longe
+BW = bwareaopen(BW, areaMin);
 
 %% Encontrar componentes
-
 CC = bwconncomp(BW);
 
 stats = regionprops(CC,...
@@ -56,12 +54,10 @@ if isempty(stats)
 end
 
 %% Procurar objetos aproximadamente quadrados
-
 areas = [];
 centers = [];
 
 for i = 1:length(stats)
-
     bb = stats(i).BoundingBox;
 
     largura = bb(3);
@@ -69,46 +65,44 @@ for i = 1:length(stats)
 
     aspecto = largura/altura;
 
-    % quadrado ≈ aspecto 1
-    if aspecto > 0.7 && aspecto < 1.3
+    % quadrado ≈ aspecto 1 (tolerância aumentada)
+    if aspecto > 0.5 && aspecto < 2.0
         areas(end+1) = stats(i).Area;
         centers(end+1,:) = stats(i).Centroid;
-
     end
+end
 
+fprintf('Componentes quadrados encontrados: %d\n', length(areas));
+if ~isempty(areas)
+    fprintf('Areas: ');
+    fprintf('%.0f ', sort(areas, 'descend'));
+    fprintf('\n');
 end
 
 if length(areas) < 4
-
-    fprintf('Quantidade de componentes: %d\n', length(stats));
-
-    error('Menos de 4 marcadores encontrados.');
+    fprintf('Quantidade de componentes quadrados: %d\n', length(areas));
+    error('Menos de 4 marcadores encontrados. Tente aproximar a camera ou melhorar a iluminacao.');
 end
 
 %% Selecionar os 4 maiores quadrados
-
 [~,idx] = sort(areas,'descend');
 
 centers = centers(idx(1:4),:);
 
 %% Ordenação dos cantos
-
 % separa topo e base
-
 [~,ordY] = sort(centers(:,2));
 
 topo = centers(ordY(1:2),:);
 base = centers(ordY(3:4),:);
 
 % esquerda-direita no topo
-
 [~,ordX] = sort(topo(:,1));
 
 TL = topo(ordX(1),:);
 TR = topo(ordX(2),:);
 
 % esquerda-direita na base
-
 [~,ordX] = sort(base(:,1));
 
 BL = base(ordX(1),:);
@@ -122,7 +116,6 @@ marcadores = [
 ];
 
 %% Visualização (debug)
-
 figure;
 imshow(img);
 hold on;

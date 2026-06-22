@@ -32,31 +32,23 @@ else
 end
 
 %% Inicialização
-
 respostas = repmat('-',50,1);
-
 alternativas = ['A' 'B' 'C' 'D' 'E'];
 
 %% Limiares
-
 limiarMarcada = 0.50;
 limiarDupla   = 0.80;
 
 %% Processar questões
-
 for q = 1:50
-
     preenchimento = zeros(1,5);
-
     for alt = 1:5
-
         x = ROIs(q,alt).x;
         y = ROIs(q,alt).y;
         w = ROIs(q,alt).w;
         h = ROIs(q,alt).h;
 
         % Garantir que ROI fique dentro da imagem
-
         x1 = max(1,x);
         y1 = max(1,y);
 
@@ -66,47 +58,33 @@ for q = 1:50
         roi = gray(y1:y2,x1:x2);
 
         %% Escurecimento médio
-
         roiNorm = double(roi)/255;
-
         preenchimento(alt) = 1 - mean(roiNorm(:));
-
     end
 
     %% DEBUG
-
     fprintf('Q%02d -> ',q);
     fprintf('%.2f ',preenchimento);
     fprintf('\n');
 
     %% Encontrar alternativa mais escura
-
     [maiorValor,idx] = max(preenchimento);
 
     %% Questão em branco
-
     if maiorValor < limiarMarcada
-
         respostas(q) = '-';
         continue;
-
     end
 
     %% Múltiplas marcações
-
     candidatos = preenchimento > (maiorValor*limiarDupla);
 
     if sum(candidatos) > 1
-
         respostas(q) = 'X';
         continue;
-
     end
 
     %% Resposta válida
-
     respostas(q) = alternativas(idx);
-
 end
-
 end
