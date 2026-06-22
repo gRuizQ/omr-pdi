@@ -1,20 +1,10 @@
-% ============================================================== % 
 % Autores: Antonio Galvão Martins Neto; Gustavo Ruiz de Queiroz  %
 % Data: 11/06/2026                                               %
-%                                                                %
 % UTFPR - Processamento Digital de Imagens                       %
-%                                                                %
-% Projeto OMR para automação de avaliações de uma ou mais folhas %
-% de respostas com base ao um gabarito reservado.                %
-%                                                                %
-% ============================================================== %
 
 function [nota, acertos, erros, brancos, pontosObtidos] = ...
     avaliarProva(respostasAluno, gabarito, pesos)
 
-% ==============================================================
-% AVALIARPROVA
-%
 % Entrada:
 %   respostasAluno (50x1)
 %   gabarito       (50x1)
@@ -26,17 +16,12 @@ function [nota, acertos, erros, brancos, pontosObtidos] = ...
 %   erros
 %   brancos
 %   pontosObtidos
-%
-% ==============================================================
-
-%% Inicialização
 
 acertos = 0;
 erros = 0;
 brancos = 0;
 pontosObtidos = 0;
 
-%% Avaliação
 for q = 1:length(gabarito)
     resposta = respostasAluno(q);
 
@@ -45,19 +30,19 @@ for q = 1:length(gabarito)
     respostasAluno(q),...
     gabarito(q));
 
-    % Questão em branco
+    % analisa brancos
     if resposta == '-'
         brancos = brancos + 1;
         continue;
     end
 
-    % Questão anulada por múltipla marcação
+    % anula erros por mais de uma resposta
     if resposta == 'X'
         erros = erros + 1;
         continue;
     end
 
-    % Acerto
+    % count de acertos
     if resposta == gabarito(q)
         acertos = acertos + 1;
         pontosObtidos = pontosObtidos + pesos(q);
@@ -66,7 +51,7 @@ for q = 1:length(gabarito)
     end
 end
 
-%% Nota
+% nota
 pontuacaoMaxima = sum(pesos);
 nota = (pontosObtidos / pontuacaoMaxima) * 10;
 end

@@ -1,27 +1,17 @@
-% ============================================================== % 
 % Autores: Antonio Galvão Martins Neto; Gustavo Ruiz de Queiroz  %
 % Data: 11/06/2026                                               %
-%                                                                %
 % UTFPR - Processamento Digital de Imagens                       %
-%                                                                %
-% Projeto OMR para automação de avaliações de uma ou mais folhas %
-% de respostas com base ao um gabarito reservado.                %
-%                                                                %
-% ============================================================== %
 
 function ROIs = localizarBolhas(imgCorrigida)
 
-% LOCALIZARBOLHAS
-%
-% Ajusta as ROIs para o tamanho da imagem corrigida.
-load('layoutFR.mat','ROI');
+% ajusta as zonas de interesse para a imagem
 
+load('layoutFR.mat','ROI');
 [h,w,~] = size(imgCorrigida);
 
-%% Dimensões utilizadas na correção
+% folha a4
 larguraRef = 2100;
 alturaRef  = 2970;
-
 sx = w/larguraRef;
 sy = h/alturaRef;
 
@@ -35,8 +25,6 @@ for q = 1:50
         ROIs(q,alt).h = round(ROI(q,alt).h * sy * 10);
     end
 end
-
-fprintf('250 bolhas ajustadas para a imagem.\n');
 
 figure;
 imshow(imgCorrigida);

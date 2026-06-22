@@ -3,11 +3,9 @@ function gerarFR()
 close all;
 clc;
 
-%% Configurações da folha
-
-largura = 210;   % A4 (mm)
+% config folha A4
+largura = 210;
 altura  = 297;
-
 figure( ...
     'Color','white',...
     'Units','centimeters',...
@@ -18,12 +16,8 @@ axis equal;
 axis off;
 hold on;
 
-%% --------------------------------------------------
-% Marcadores fiduciais
-% --------------------------------------------------
-
-fidSize = 10; % mm
-
+% marcadores fiduciais
+fidSize = 10;
 fiduciais = [
     10, altura-20;
     largura-20, altura-20;
@@ -39,10 +33,6 @@ for k = 1:4
         'FaceColor','black');
 
 end
-
-%% --------------------------------------------------
-% Tipo de Prova (A, B, C, D)
-% --------------------------------------------------
 
 tipoLabels = ['A','B','C','D'];
 bolha = 5;
@@ -70,21 +60,13 @@ for alt = 1:4
     tipoROI(alt).h = bolha;
 end
 
-text(30, yTipo+3, 'TIPO DE PROVA:', 'FontSize',10, 'FontWeight','bold','Color','black');
-
-%% --------------------------------------------------
-% Título
-% --------------------------------------------------
+text(40, yTipo+3, 'TIPO DE PROVA:', 'FontSize',10, 'FontWeight','bold','Color','black');
 
 text(60,260,...
     'FOLHA DE RESPOSTAS',...
     'FontSize',16,...
     'FontWeight','bold',...
     'Color','black');
-
-%% --------------------------------------------------
-% Questões
-% --------------------------------------------------
 
 alternativas = ['A','B','C','D','E'];
 ROI = struct();
@@ -133,17 +115,10 @@ for coluna = 1:2
     end
 end
 
-%% --------------------------------------------------
-% Salvar PDF
-% --------------------------------------------------
-
+% salva pdf e coordenadas
 exportgraphics(gcf,...
     'FolhaResposta.pdf',...
     'ContentType','vector');
-
-%% --------------------------------------------------
-% Salvar coordenadas
-% --------------------------------------------------
 
 save( ...
     'layoutFR.mat',...
@@ -153,5 +128,4 @@ save( ...
 
 fprintf('FolhaResposta.pdf gerada com sucesso.\n');
 fprintf('layoutFR.mat salvo com sucesso.\n');
-
 end
